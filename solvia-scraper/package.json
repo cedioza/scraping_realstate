@@ -1,0 +1,10 @@
+{
+  "name": "solvia-scraper",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

@@ -1,0 +1,12 @@
+{
+    "name": "cra-scrapers",
+    "version": "1.0.0",
+    "description": "Multi-scraper workspace: Solvia + Idealista",
+    "private": true,
+    "scripts": {
+        "solvia": "cd solvia-scraper && npm start",
+        "idealista": "cd idealista-scraper && npm start",
+        "altamira": "cd altamira-scraper && npm start",
+        "install:all": "cd solvia-scraper && npm install && cd ../idealista-scraper && npm install && cd ../altamira-scraper && npm install"
+    }
+}

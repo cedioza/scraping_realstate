@@ -1,0 +1,70 @@
+openapi: 3.0.0
+info:
+  title: Scraper Orchestrator API
+  description: API interna para ejecutar de forma unificada distintos scrapers inmobiliarios enviando la URL objetivo.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Servidor Local
+paths:
+  /api/scrape:
+    post:
+      summary: Inicia el proceso de scraping
+      description: Lanza un proceso hijo ejecutando el scraper indicado sobre la URL proporcionada. Es un endpoint asíncrono que retorna 202 Aceptado inmediatamente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - scraper
+                - url
+              properties:
+                scraper:
+                  type: string
+                  enum: [idealista, altamira, fotocasa, solvia, aliseda]
+                  description: El identificador del scraper a utilizar.
+                url:
+                  type: string
+                  format: uri
+                  description: La URL exacta de la búsqueda o anuncio a procesar.
+                  example: "https://www.idealista.com/pro/sa-roqueta-investments/venta-viviendas/chipiona-cadiz/"
+      responses:
+        '202':
+          description: Proceso iniciado con éxito
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  scraper:
+                    type: string
+                  url:
+                    type: string
+        '400':
+          description: Error en los parámetros o scraper inválido
+  
+  /api/results/{scraper}:
+    get:
+      summary: Obtiene los resultados guardados
+      description: Lee los datasets JSON guardados en la carpeta `storage/datasets/default` correspondientes al scraper indicado.
+      parameters:
+        - in: path
+          name: scraper
+          required: true
+          schema:
+            type: string
+            enum: [idealista, altamira, fotocasa, solvia, aliseda]
+      responses:
+        '200':
+          description: Lista de resultados extraídos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  description: Datos de inmuebles

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Scraper Dashboard</title>
+    <meta name="description" content="Herramienta de extracción de datos inmobiliarios - Solvia e Idealista">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 3rem 2rem 2rem;
+        }
+
+        .header-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.4rem;
+            font-weight: 300;
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 1rem 2rem 3rem;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        /* Cards */
+        .card {
+            background: #111111;
+            border: 1px solid #1e1e1e;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 380px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: #13ecb622;
+            box-shadow: 0 4px 24px rgba(19, 236, 182, 0.04);
+        }
+
+        .card-brand {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 1.2rem;
+            letter-spacing: 0.02em;
+        }
+
+        .card-brand.solvia {
+            color: #c2185b;
+        }
+
+        .card-brand.idealista {
+            color: #96c800;
+            font-style: italic;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        .card-target {
+            font-size: 0.95rem;
+            color: #ccc;
+            margin-bottom: 0.6rem;
+            font-weight: 400;
+        }
+
+        .card-url {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: #555;
+            background: #0d0d0d;
+            border: 1px solid #1a1a1a;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 1.2rem;
+            word-break: break-all;
+            line-height: 1.5;
+        }
+
+        .card-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #13ecb6;
+            background: rgba(19, 236, 182, 0.08);
+            border: 1px solid rgba(19, 236, 182, 0.15);
+            padding: 0.3rem 0.7rem;
+            border-radius: 20px;
+            margin-bottom: 1.5rem;
+        }
+
+        .btn-run {
+            display: block;
+            width: 100%;
+            padding: 0.8rem 1.5rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #0a0a0a;
+            background: linear-gradient(135deg, #13ecb6, #0fd4a3);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.01em;
+        }
+
+        .btn-run:hover {
+            background: linear-gradient(135deg, #17ffc9, #13ecb6);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(19, 236, 182, 0.25);
+        }
+
+        .btn-run:active {
+            transform: translateY(0);
+        }
+
+        .btn-run.running {
+            background: linear-gradient(135deg, #333, #444);
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        /* Status area */
+        .card-status {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: #666;
+            background: #0d0d0d;
+            border: 1px solid #1a1a1a;
+            display: none;
+            line-height: 1.6;
+        }
+
+        .card-status.active {
+            display: block;
+        }
+
+        .card-status.success {
+            border-color: rgba(19, 236, 182, 0.2);
+            color: #13ecb6;
+        }
+
+        .card-status.error {
+            border-color: rgba(255, 82, 82, 0.2);
+            color: #ff5252;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 1.5rem 2rem;
+            border-top: 1px solid #141414;
+        }
+
+        .footer p {
+            font-size: 0.72rem;
+            color: #444;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .footer .version {
+            margin-top: 0.3rem;
+            color: #333;
+        }
+
+        /* Spinner */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #333;
+            border-top-color: #13ecb6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+
+        /* Responsive */
+        @media (max-width: 820px) {
+            .main {
+                flex-direction: column;
+                align-items: center;
+            }
+            .card {
+                width: 100%;
+                max-width: 420px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-icon">🏠</div>
+        <h1>Property Scraper</h1>
+        <p>Herramienta de extracción de datos inmobiliarios</p>
+    </header>
+
+    <main class="main">
+        <!-- Card: Solvia -->
+        <div class="card" id="card-solvia">
+            <div class="card-brand solvia">SOLVIA</div>
+            <div class="card-target">Viviendas en Cádiz</div>
+            <div class="card-url">solvia.es/es/comprar/viviendas/cadiz</div>
+            <div class="card-badge">Configurado ✓</div>
+            <button class="btn-run" id="btn-solvia" onclick="runScraper('solvia')">
+                Ejecutar Scraper
+            </button>
+            <div class="card-status" id="status-solvia"></div>
+        </div>
+
+        <!-- Card: Idealista -->
+        <div class="card" id="card-idealista">
+            <div class="card-brand idealista">idealista</div>
+            <div class="card-target">Chipiona, Cádiz — Sa Roqueta Investments</div>
+            <div class="card-url">idealista.com/pro/sa-roqueta-investments/venta-viviendas/chipiona-cadiz/</div>
+            <div class="card-badge">Configurado ✓</div>
+            <button class="btn-run" id="btn-idealista" onclick="runScraper('idealista')">
+                Ejecutar Scraper
+            </button>
+            <div class="card-status" id="status-idealista"></div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>Resultados se guardan en <strong>storage/datasets/default/</strong></p>
+        <p class="version">v1.0</p>
+    </footer>
+
+    <script>
+        function runScraper(type) {
+            const btn = document.getElementById(`btn-${type}`);
+            const status = document.getElementById(`status-${type}`);
+
+            // Show running state
+            btn.classList.add('running');
+            btn.innerHTML = '<span class="spinner"></span> Ejecutando...';
+            btn.disabled = true;
+
+            status.className = 'card-status active';
+            status.innerHTML = `⏳ Iniciando scraper de ${type === 'solvia' ? 'Solvia' : 'Idealista'}...<br>` +
+                `📂 Directorio: ${type}-scraper/<br>` +
+                `🕐 ${new Date().toLocaleString('es-ES')}`;
+
+            // Simulate scraper execution info
+            setTimeout(() => {
+                status.innerHTML += '<br>🔄 Conectando al sitio web...';
+            }, 1500);
+
+            setTimeout(() => {
+                status.innerHTML += '<br>🍪 Aceptando cookies...';
+            }, 3000);
+
+            setTimeout(() => {
+                status.innerHTML += '<br>📋 Escaneando listado de propiedades...';
+            }, 5000);
+
+            // Note: In production, these buttons would trigger actual API calls
+            // to a backend that runs the scrapers. For now, this is a UI demo.
+            setTimeout(() => {
+                status.className = 'card-status active success';
+                status.innerHTML += '<br><br>✅ Para ejecutar el scraper realmente, usa:<br>' +
+                    `<strong>cd ${type}-scraper && npm start</strong>`;
+                btn.classList.remove('running');
+                btn.innerHTML = 'Ejecutar Scraper';
+                btn.disabled = false;
+            }, 7000);
+        }
+    </script>
+</body>
+</html>

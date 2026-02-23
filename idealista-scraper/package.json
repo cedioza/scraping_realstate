@@ -1,0 +1,19 @@
+{
+    "name": "idealista-scraper",
+    "version": "1.0.0",
+    "description": "Scraper para propiedades de Idealista usando Crawlee + Playwright",
+    "type": "module",
+    "scripts": {
+        "start": "node src/main.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "dependencies": {
+        "cheerio": "^1.2.0",
+        "code-oss": "^1.109.2",
+        "crawlee": "^3.0.0",
+        "dotenv": "^17.3.1",
+        "playwright": "^1.40.0",
+        "playwright-extra": "^4.3.6",
+        "puppeteer-extra-plugin-stealth": "^2.11.2"
+    }
+}
