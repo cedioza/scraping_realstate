@@ -1,0 +1,11 @@
+node_modules
+*/node_modules
+.git
+.env
+.DS_Store
+storage
+crawlee_storage
+scraper-api/storage
+api-docs/build
+api-docs/.docusaurus
+.npm
