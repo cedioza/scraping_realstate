@@ -12,13 +12,9 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@prisma/client": "^6.19.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "swagger-ui-express": "^5.0.1",
     "yamljs": "^0.3.0"
-  },
-  "devDependencies": {
-    "prisma": "^6.19.2"
   }
 }

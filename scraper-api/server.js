@@ -7,21 +7,25 @@ import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
 import fs from 'fs';
 import { EventEmitter } from 'events';
-import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const prisma = new PrismaClient();
 
 app.use(cors());
 app.use(express.json());
 
 // Cargar Swagger
-const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+let swaggerDocument;
+try {
+    swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+} catch (err) {
+    console.log("No se pudo cargar swagger.yaml. Documentación no disponible.");
+}
 
 // Emisor de eventos global para logs
 const logEmitter = new EventEmitter();
@@ -36,15 +40,27 @@ const SCRAPERS = {
     aliseda: '../aliseda-scraper'
 };
 
-app.post('/api/scrape', async (req, res) => {
-    const { scraper, url } = req.body;
+const detectScraper = (url) => {
+    if (!url) return null;
+    if (url.includes('idealista.com')) return 'idealista';
+    if (url.includes('altamirainmuebles.com')) return 'altamira';
+    if (url.includes('fotocasa.es')) return 'fotocasa';
+    if (url.includes('solvia.es')) return 'solvia';
+    if (url.includes('alisedainmobiliaria.com')) return 'aliseda';
+    return null;
+};
 
-    if (!scraper || !SCRAPERS[scraper]) {
-        return res.status(400).json({ error: `Scraper inválido. Opciones válidas: ${Object.keys(SCRAPERS).join(', ')}` });
-    }
+app.post('/api/scrape', async (req, res) => {
+    const { url } = req.body;
 
     if (!url) {
         return res.status(400).json({ error: 'Falta la URL objetivo' });
+    }
+
+    const scraper = detectScraper(url);
+
+    if (!scraper || !SCRAPERS[scraper]) {
+        return res.status(400).json({ error: `No se pudo determinar un scraper válido para esta URL. Portales soportados: idealista, altamira, fotocasa, solvia, aliseda.` });
     }
 
     const scraperDir = path.resolve(__dirname, SCRAPERS[scraper]);
@@ -54,21 +70,21 @@ app.post('/api/scrape', async (req, res) => {
         return res.status(500).json({ error: `No se encuentra el script ${scriptPath}` });
     }
 
+    const jobId = crypto.randomUUID();
+    const crawleeStorageDir = path.resolve(__dirname, 'storage', 'jobs', jobId);
+
     try {
-        // 1. Registrar búsqueda en Base de Datos
-        const searchRecord = await prisma.searchHistory.create({
-            data: {
-                portal: scraper,
-                url: url,
-                status: 'PROCESSING'
+        logEmitter.emit(`log_${jobId}`, `🚀 Iniciando proceso de scraping (JobID: ${jobId}, Scraper: ${scraper})...`);
+
+        // Ejecutar proceso hijo con variable de entorno para storage de crawlee
+        const child = spawn('node', ['src/main.js', url], {
+            cwd: scraperDir,
+            env: {
+                ...process.env,
+                CRAWLEE_DISABLE_SYSTEM_INFO: '1',
+                CRAWLEE_STORAGE_DIR: crawleeStorageDir
             }
         });
-
-        const jobId = searchRecord.id.toString();
-        logEmitter.emit(`log_${jobId}`, `🚀 Registrado en BD. Iniciando proceso de scraping (JobID: ${jobId})...`);
-
-        // Ejecutar proceso hijo
-        const child = spawn('node', ['src/main.js', url], { cwd: scraperDir });
 
         child.stdout.on('data', (data) => {
             const lines = data.toString().split('\n').filter(l => l.trim().length > 0);
@@ -91,71 +107,41 @@ app.post('/api/scrape', async (req, res) => {
             console.log(`[${scraper}-${jobId}] ${finishMsg}`);
             logEmitter.emit(`log_${jobId}`, finishMsg);
 
-            // 2. Procesar resultados si exitoso
+            let results = [];
             let status = code === 0 ? 'COMPLETED' : 'FAILED';
 
-            if (code === 0) {
-                const datasetDir = path.resolve(__dirname, SCRAPERS[scraper], 'storage', 'datasets', 'default');
-                if (fs.existsSync(datasetDir)) {
-                    const files = fs.readdirSync(datasetDir).filter(f => f.endsWith('.json'));
-                    logEmitter.emit(`log_${jobId}`, `💾 Subiendo ${files.length} propiedades a PostgreSQL...`);
-
-                    const propertiesToInsert = [];
-
-                    for (const file of files) {
-                        try {
-                            const data = JSON.parse(fs.readFileSync(path.join(datasetDir, file), 'utf-8'));
-
-                            // Mapear al Schema de Prisma
-                            propertiesToInsert.push({
-                                searchId: searchRecord.id,
-                                fechaReg: data["Fecha reg"] || null,
-                                refId: data["ID"] || data["Ref. Catastral/registral"] || null,
-                                entidad: data["Entidad"] || scraper,
-                                estado: data["Estado"] || null,
-                                tipo: data["Tipo"] || null,
-                                localidad: data["Localidad"] || null,
-                                direccion: data["Dirección"] || null,
-                                enlaceMaps: data["Enlace a google maps"] || null,
-                                precio: data["PRECIO"]?.toString() || null,
-                                m2: data["M2"]?.toString() || null,
-                                habitaciones: data["Habitaciones"]?.toString() || null,
-                                linkAnuncio: data["LINK ANUNCIO"] || null
-                            });
-                        } catch (err) {
-                            console.error(`Error parseando ${file}:`, err);
-                        }
-                    }
-
-                    if (propertiesToInsert.length > 0) {
-                        await prisma.property.createMany({
-                            data: propertiesToInsert,
-                            skipDuplicates: true // Si tuvieramos unique constraints
-                        });
-                        logEmitter.emit(`log_${jobId}`, `✅ ${propertiesToInsert.length} propiedades insertadas en BD.`);
-                    } else {
-                        logEmitter.emit(`log_${jobId}`, `⚠️ No se encontraron inmuebles válidos para guardar.`);
-                        status = 'FAILED';
+            // Buscar resultados en el directorio temporal
+            const datasetDir = path.join(crawleeStorageDir, 'datasets', 'default');
+            if (fs.existsSync(datasetDir)) {
+                const files = fs.readdirSync(datasetDir).filter(f => f.endsWith('.json'));
+                for (const file of files) {
+                    try {
+                        const fileContent = fs.readFileSync(path.join(datasetDir, file), 'utf-8');
+                        const data = JSON.parse(fileContent);
+                        results.push(data);
+                    } catch (err) {
+                        console.error(`Error parseando ${file}:`, err);
                     }
                 }
             }
 
-            // Actualizar status final
-            await prisma.searchHistory.update({
-                where: { id: searchRecord.id },
-                data: { status }
-            });
+            // Eliminar directorio temporal
+            try {
+                if (fs.existsSync(crawleeStorageDir)) {
+                    fs.rmSync(crawleeStorageDir, { recursive: true, force: true });
+                }
+            } catch (err) {
+                console.error(`Error eliminando storage temporal ${crawleeStorageDir}:`, err);
+            }
 
-            // Enviar evento de finalización al frontend y limpiar
             logEmitter.emit(`done_${jobId}`, status);
-        });
 
-        // 3. Responder al Frontend con el ID del job
-        res.status(202).json({
-            message: 'Proceso de scraping iniciado',
-            jobId: jobId,
-            scraper: scraper,
-            url: url
+            // Devolver resultados HTTP
+            if (code === 0) {
+                return res.json({ success: true, data: results, scraper: scraper });
+            } else {
+                return res.status(500).json({ success: false, error: 'Proceso de scraping fallido.', data: results });
+            }
         });
 
     } catch (e) {
@@ -168,48 +154,30 @@ app.post('/api/scrape', async (req, res) => {
 app.get('/api/logs/:jobId', (req, res) => {
     const { jobId } = req.params;
 
-    // Cabeceras SSE obligatorias
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Avisar conexion inicial
     res.write(`data: Conectado. Escuchando logs del Job ${jobId}...\n\n`);
 
     const logListener = (message) => {
-        // SSE manda los datos con "data: " por delante, y dos saltos de línea al final
         res.write(`data: ${message}\n\n`);
     };
 
     const doneListener = (status) => {
         res.write(`event: done\ndata: ${status}\n\n`);
-        res.end(); // Cerrar la conexión
+        res.end();
         cleanup();
     };
 
     logEmitter.on(`log_${jobId}`, logListener);
     logEmitter.on(`done_${jobId}`, doneListener);
 
-    // Cliente se desconecta abruptamente
-    req.on('close', () => {
-        cleanup();
-    });
+    req.on('close', () => cleanup());
 
     function cleanup() {
         logEmitter.off(`log_${jobId}`, logListener);
         logEmitter.off(`done_${jobId}`, doneListener);
-    }
-});
-
-app.get('/api/results/all', async (req, res) => {
-    try {
-        const results = await prisma.searchHistory.findMany({
-            include: { properties: true },
-            orderBy: { createdAt: 'desc' }
-        });
-        res.json(results);
-    } catch (e) {
-        res.status(500).json({ error: e.message });
     }
 });
 
