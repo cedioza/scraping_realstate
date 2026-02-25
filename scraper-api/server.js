@@ -32,6 +32,15 @@ const logEmitter = new EventEmitter();
 // Evitar límite de listeners si hay muchos procesos
 logEmitter.setMaxListeners(0);
 
+// Servir estáticos de Docusaurus si existen (Integración para Producción Dokploy)
+const docusaurusBuildPath = path.resolve(__dirname, '../api-docs/build');
+if (fs.existsSync(docusaurusBuildPath)) {
+    console.log(`📄 Sirviendo documentación Docusaurus desde: ${docusaurusBuildPath}`);
+    app.use(express.static(docusaurusBuildPath));
+} else {
+    console.log(`⚠️ Build de Docusaurus no encontrado en ${docusaurusBuildPath}. Ejecuta 'npm run build' en api-docs si lo requieres.`);
+}
+
 const SCRAPERS = {
     idealista: '../idealista-scraper',
     altamira: '../altamira-scraper',
