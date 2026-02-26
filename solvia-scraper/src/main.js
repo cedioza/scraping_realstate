@@ -13,7 +13,7 @@ const GLOBAL_SELECTORS = {
 const crawler = new PlaywrightCrawler({
     // Headless: false para ver que está pasando (útil al principio)
     // Cambiar a true cuando esté estable.
-    headless: false,
+    headless: true,
 
     // Router importado de routes.js
     requestHandler: router,
