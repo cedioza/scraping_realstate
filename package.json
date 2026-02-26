@@ -4,7 +4,7 @@
     "description": "Multi-scraper workspace: Solvia + Idealista",
     "private": true,
     "scripts": {
-        "postinstall": "cd scraper-api && npm install && cd ../api-docs && npm install && cd ../aliseda-scraper && npm install && cd ../altamira-scraper && npm install && cd ../fotocasa-scraper && npm install && cd ../idealista-scraper && npm install && cd ../solvia-scraper && npm install",
+        "postinstall": "cd scraper-api && npm install && cd ../api-docs && npm install && cd ../idealista-scraper && npm install && cd ../altamira-scraper && npm install && cd ../fotocasa-scraper && npm install && cd ../solvia-scraper && npm install && cd ../aliseda-scraper && npm install",
         "build": "cd api-docs && npm run build",
         "start": "cd scraper-api && npm start"
     }

@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import axios from 'axios';
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -56,11 +57,10 @@ const detectScraper = (url) => {
     if (url.includes('fotocasa.es')) return 'fotocasa';
     if (url.includes('solvia.es')) return 'solvia';
     if (url.includes('alisedainmobiliaria.com')) return 'aliseda';
-    return null;
 };
 
 app.post('/api/scrape', async (req, res) => {
-    const { url } = req.body;
+    const { url, webhookUrl } = req.body;
 
     if (!url) {
         return res.status(400).json({ error: 'Falta la URL objetivo' });
@@ -81,6 +81,17 @@ app.post('/api/scrape', async (req, res) => {
 
     const jobId = crypto.randomUUID();
     const crawleeStorageDir = path.resolve(__dirname, 'storage', 'jobs', jobId);
+
+    // If a webhookUrl is provided, return 202 immediately to prevent timeout.
+    // Otherwise, maintain synchronous behavior (useful for local development or fast queries).
+    if (webhookUrl) {
+        res.status(202).json({
+            success: true,
+            message: 'Proceso de scraping iniciado en segundo plano.',
+            jobId,
+            webhookUrl
+        });
+    }
 
     try {
         logEmitter.emit(`log_${jobId}`, `🚀 Iniciando proceso de scraping (JobID: ${jobId}, Scraper: ${scraper})...`);
@@ -145,19 +156,40 @@ app.post('/api/scrape', async (req, res) => {
 
             logEmitter.emit(`done_${jobId}`, status);
 
-            // Devolver resultados HTTP
-            if (code === 0) {
-                return res.json({ success: true, data: results, scraper: scraper });
+            const responsePayload = {
+                jobId,
+                status: status,
+                scraper: scraper,
+                url: url,
+                data: results,
+                error: code !== 0 ? 'Proceso de scraping fallido.' : null
+            };
+
+            if (webhookUrl) {
+                try {
+                    console.log(`[${jobId}] Enviando resultados por Webhook a ${webhookUrl}...`);
+                    await axios.post(webhookUrl, responsePayload);
+                    console.log(`[${jobId}] Webhook entregado con éxito.`);
+                } catch (webhookErr) {
+                    console.error(`[${jobId}] Error entregando Webhook a ${webhookUrl}:`, webhookErr.message);
+                }
             } else {
-                return res.status(500).json({ success: false, error: 'Proceso de scraping fallido.', data: results });
+                if (code === 0) {
+                    return res.json(responsePayload);
+                } else {
+                    return res.status(500).json(responsePayload);
+                }
             }
         });
 
     } catch (e) {
         console.error('Error general al iniciar scrape:', e);
-        res.status(500).json({ error: 'Error interno del servidor.' });
+        if (!webhookUrl) {
+            res.status(500).json({ error: 'Error interno del servidor.' });
+        }
     }
 });
+
 
 // Endpoint EventSource para logs (SSE)
 app.get('/api/logs/:jobId', (req, res) => {

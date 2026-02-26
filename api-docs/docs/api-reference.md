@@ -2,50 +2,50 @@
 sidebar_position: 2
 ---
 
-# API Reference
+# Referencia de la API
 
-This page documents the single HTTP endpoint provided by the Scraper server.
+Esta página documenta el endpoint HTTP principal proporcionado por el servidor de Scraping Inmobiliario.
 
 ## POST `/api/scrape`
 
-Submits a URL to be scraped by the internal headless browser automation and returns a consolidated array of properties.
+Envía una URL para ser extraída por el navegador automatizado interno.
 
-### Request Body
+### Cuerpo del Request (JSON)
 
-- **`url`** (string, required): The URL of the specific property or property list to be scraped. The backend will automatically infer which scraper implementation to use based on the domain (idealista, fotocasa, etc.)
+- **`url`** (string, obligatorio): La URL de la propiedad específica o lista de propiedades a extraer. El backend detectará automáticamente qué portal usar (idealista, fotocasa, etc.)
+- **`webhookUrl`** (string, opcional): La URL a la que el servidor enviará (vía POST) los resultados extraídos al finalizar (Flujo Asíncrono).
 
-**Example JSON Payload:**
+**Ejemplo JSON Payload (Modo Asíncrono para n8n):**
 ```json
 {
-  "url": "https://www.alisedainmobiliaria.com/comprar-viviendas/andalucia/cadiz/puerto-de-santa-maria-el"
+  "url": "https://www.alisedainmobiliaria.com/comprar-viviendas/andalucia/cadiz/puerto-de-santa-maria-el",
+  "webhookUrl": "https://min8n.dominio.com/webhook/c347-1234-5678"
 }
 ```
 
-**cURL Example:**
-```bash
-curl -X POST http://localhost:3000/api/scrape \
-     -H "Content-Type: application/json" \
-     -d '{"url":"https://www.alisedainmobiliaria.com/comprar-viviendas/andalucia/cadiz/puerto-de-santa-maria-el"}'
-```
+### Respuestas
 
-### Supported Scraper Domains
-The server detects the targeted portal automatically by checking the URL:
-- `idealista.com`
-- `altamirainmuebles.com`
-- `fotocasa.es`
-- `solvia.es`
-- `alisedainmobiliaria.com`
-
-### Response (200 OK)
-
-The request stays open while the scraper processes the data (which can take a few minutes depending on the pagination size).
-
-Once complete, it returns a total combined array of the extracted results.
+#### 1. Respuesta Inmediata (Con `webhookUrl` - 202 Accepted)
+Si proporcionas un `webhookUrl`, la API **no bloquea la petición**. Inmediatamente te devolverá un HTTP 202 para que tu flujo (ej. n8n) pueda continuar, y procesará el scraper en segundo plano.
 
 ```json
 {
   "success": true,
+  "message": "Proceso de scraping iniciado en segundo plano.",
+  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "webhookUrl": "https://min8n.dominio.com/webhook/c347-1234-5678"
+}
+```
+
+#### 2. Respuesta Final (Enviada a tu `webhookUrl` o devuelta sincrónicamente - 200 OK)
+Una vez que el scraper finaliza (puede tardar minutos), enviará un payload JSON con toda la data extraída a tu webhook (o mediante el request HTTP original si no usaste `webhookUrl`).
+
+```json
+{
+  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "status": "COMPLETED",
   "scraper": "aliseda",
+  "url": "https://www.alisedainmobiliaria.com/...",
   "data": [
     {
       "Fecha reg": "25/2/2026",
@@ -53,35 +53,19 @@ Once complete, it returns a total combined array of the extracted results.
       "Entidad": "Aliseda",
       "Estado": "SEGUNDA MANO",
       "Tipo": "PISO",
-      "Localidad": "Puerto De Santa Maria (el)",
-      "Dirección": "Calle Falsa 123",
-      "Enlace a google maps": "https://www.google.com/maps/...",
       "PRECIO": "120000",
-      "M2": "90",
-      "Habitaciones": "3",
-      "LINK ANUNCIO": "https://www.alisedainmobiliaria.com/..."
+      ...
     }
-  ]
+  ],
+  "error": null
 }
 ```
 
-### Errors
+### Errores Comunes
 
 **400 Bad Request**
-- If the `url` parameter is missing.
-- If the domain does not map to any supported scrapers.
-
-```json
-{
-  "error": "No se pudo determinar un scraper válido para esta URL."
-}
-```
+- Si falta el parámetro `url`.
+- Si el dominio no pertenece a `idealista.com`, `fotocasa.es`, `altamirainmuebles.com`, `alisedainmobiliaria.com` o `solvia.es`.
 
 **500 Internal Server Error**
-- If an internal process crashes or the scraper script file is missing.
-
----
-
-## Server Logs Endpoint (Optional)
-
-If the `POST /api/scrape` takes too long, you can optionally stream real-time logs using SSE (Server-Sent Events) via `GET /api/logs/:jobId`. However, this requires pre-generating a jobId which the current synchronized flow bypasses. For full bidirectional scraping flows, this endpoint helps monitor standard output and errors natively from the process execution.
+- Falla interna del servidor o script no encontrado. (Nota: los errores de scrapeo del bot que no logran completarse llegarán a tu `webhookUrl` con `"status": "FAILED"` y la descripción del error).
